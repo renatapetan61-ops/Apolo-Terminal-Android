@@ -9,7 +9,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN test "${TARGETARCH}" = "arm64" && apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg python3 xz-utils \
       iproute2 iptables nftables kmod e2fsprogs procps psmisc util-linux \
-      bash zsh tmux sudo passwd login adduser shadow \
+      bash zsh tmux sudo passwd login adduser \
       git wget jq vim-tiny nano less file findutils grep sed gawk \
       build-essential pkg-config cmake ninja-build make gcc g++ \
       python3 python3-pip python3-venv pipx \
