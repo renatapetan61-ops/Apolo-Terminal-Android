@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.content.ServiceConnection
 import android.graphics.Color
 import android.os.Build
@@ -18,6 +19,8 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.io.File
+import java.util.concurrent.Executors
 import com.apolo.terminal.vm.VmService
 import org.json.JSONObject
 
@@ -26,6 +29,8 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private var vmService: VmService? = null
     private var bound = false
+    private var pendingImport: ImportKind? = null
+    private val importExecutor = Executors.newSingleThreadExecutor()
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -85,9 +90,17 @@ class MainActivity : Activity() {
         }
         actions.addView(start, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         actions.addView(stop, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val imports = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        imports.addView(importButton("QEMU") { chooseImport(ImportKind.QEMU) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        imports.addView(importButton("Kernel") { chooseImport(ImportKind.KERNEL) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        imports.addView(importButton("Disco") { chooseImport(ImportKind.DISK) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(title)
         header.addView(status)
         header.addView(actions)
+        header.addView(imports)
         root.addView(header)
 
         terminal = WebView(this).apply {
@@ -117,11 +130,58 @@ class MainActivity : Activity() {
         status.text = "Preparando VM Linux real…"
     }
 
+    private fun importButton(label: String, action: () -> Unit): Button =
+        Button(this).apply { text = "Importar $label"; setOnClickListener { action() } }
+
+    private fun chooseImport(kind: ImportKind) {
+        pendingImport = kind
+        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(picker, FILE_PICKER_REQUEST)
+    }
+
+    @Deprecated("Legacy document picker callback retained for broad Android compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != FILE_PICKER_REQUEST || resultCode != RESULT_OK) return
+        val uri: Uri = data?.data ?: return
+        val kind = pendingImport ?: return
+        pendingImport = null
+        status.text = "Copiando ${kind.label} para o armazenamento privado…"
+        importExecutor.execute {
+            try {
+                val target = File(filesDir, kind.relativePath)
+                target.parentFile?.mkdirs()
+                contentResolver.openInputStream(uri).use { input ->
+                    requireNotNull(input) { "Não foi possível abrir o arquivo selecionado" }
+                    target.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+                }
+                if (kind == ImportKind.QEMU) target.setExecutable(true, true)
+                runOnUiThread { status.text = "${kind.label} importado: ${target.length()} bytes" }
+            } catch (error: Exception) {
+                runOnUiThread { status.text = "Falha ao importar ${kind.label}: ${error.message}" }
+            }
+        }
+    }
+
     override fun onDestroy() {
         if (bound) unbindService(connection)
+        importExecutor.shutdownNow()
         terminal.removeJavascriptInterface("ApoloBridge")
         terminal.destroy()
         super.onDestroy()
+    }
+
+    private enum class ImportKind(val label: String, val relativePath: String) {
+        QEMU("QEMU ARM64", "bin/qemu-system-aarch64"),
+        KERNEL("Kernel Linux", "vm/Image"),
+        DISK("Disco ext4", "vm/apolo-rootfs.ext4")
+    }
+
+    companion object {
+        private const val FILE_PICKER_REQUEST = 7412
     }
 
     private class TerminalBridge(private val input: (String) -> Unit) {
