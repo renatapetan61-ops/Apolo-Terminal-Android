@@ -1,13 +1,27 @@
 # Android application shell
 
-The Android app provides a local xterm.js terminal and a foreground VM process controller. It will only launch a real QEMU executable when all three files exist in app-private storage:
+The Android app provides a locally bundled xterm.js terminal, a foreground VM process controller and import controls for the runtime files.
+
+## Import files
+
+1. Import QEMU: select the ZIP artifact named `apolo-qemu-android-arm64.zip`. The app extracts the Android/Bionic executable and its shared libraries into app-private storage.
+2. Import Kernel: select the guest `Image` produced by the Linux VM build.
+3. Import Disk: select `apolo-rootfs.ext4` produced by the Linux VM build.
+4. Tap **Iniciar Linux**.
+
+The QEMU runtime ZIP is built by the pinned Termux package recipe. It is not a Linux x86_64 executable. The app launches it with an explicit TCG accelerator and sets its library path to the imported runtime libraries.
+
+## Runtime checks
+
+Expected app-private paths:
 
 - filesDir/bin/qemu-system-aarch64
+- filesDir/lib/*.so*
 - filesDir/vm/Image
 - filesDir/vm/apolo-rootfs.ext4
 
-If any file is missing, the UI reports the missing runtime and does not create a fake shell.
+If any required file is missing, the UI reports the missing component and does not create a fake shell.
 
 ## Current integration boundary
 
-The guest kernel and ext4 image are built by the Linux VM workflow. The QEMU Android host executable is a separate NDK cross-build deliverable and is not yet bundled. The current app can be compiled, but it cannot boot the guest until that Android-compatible QEMU binary is produced and installed. Serial console is currently one shared session; independent SSH/tmux tabs are a subsequent integration step.
+The Android app source and build workflow are present. The QEMU Android runtime, Linux kernel and ext4 guest disk are separate CI artifacts that must be successfully built and imported. The app's current terminal is one serial-console session; independent SSH/tmux tabs are the next feature after the VM boot is verified on a real Android device.
