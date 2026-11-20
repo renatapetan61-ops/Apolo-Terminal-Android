@@ -1,0 +1,10 @@
+{
+  "name": "apolo-terminal-web-assets",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Locally bundled xterm.js assets for APOLO Terminal Android",
+  "dependencies": {
+    "@xterm/xterm": "5.5.0",
+    "@xterm/addon-fit": "0.10.0"
+  }
+}
