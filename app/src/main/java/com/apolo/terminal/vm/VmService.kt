@@ -12,6 +12,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class VmService : Service() {
     inner class LocalBinder : Binder() {
@@ -20,10 +21,12 @@ class VmService : Service() {
 
     private val binder = LocalBinder()
     private val executor = Executors.newSingleThreadExecutor()
-    private var process: Process? = null
-    private var outputListener: ((String) -> Unit)? = null
-    private var statusListener: ((String) -> Unit)? = null
+    @Volatile private var process: Process? = null
+    @Volatile private var outputListener: ((String) -> Unit)? = null
+    @Volatile private var statusListener: ((String) -> Unit)? = null
+    @Volatile private var lastStatus = "VM parada"
     private val outputBuffer = StringBuilder()
+    @Volatile private var readerThread: Thread? = null
 
     override fun onBind(intent: Intent?): IBinder = binder
 
@@ -32,18 +35,18 @@ class VmService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification("Inicializando Linux convidado"))
             startVm()
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     fun setOutputListener(listener: (String) -> Unit) {
         outputListener = listener
-        synchronized(outputBuffer) {
-            if (outputBuffer.isNotEmpty()) listener(outputBuffer.toString())
-        }
+        val previous = synchronized(outputBuffer) { outputBuffer.toString() }
+        if (previous.isNotEmpty()) listener(previous)
     }
 
     fun setStatusListener(listener: (String) -> Unit) {
         statusListener = listener
+        listener(lastStatus)
     }
 
     fun startVm() {
@@ -87,26 +90,37 @@ class VmService : Service() {
                 val child = ProcessBuilder(command).directory(filesDir).redirectErrorStream(true).start()
                 process = child
                 publishStatus("QEMU iniciado; aguardando boot do kernel Linux…")
-                val reader = InputStreamReader(child.inputStream, StandardCharsets.UTF_8)
-                val chars = CharArray(4096)
-                while (true) {
-                    val count = reader.read(chars)
-                    if (count < 0) break
-                    val chunk = String(chars, 0, count)
-                    synchronized(outputBuffer) {
-                        outputBuffer.append(chunk)
-                        if (outputBuffer.length > MAX_OUTPUT_CHARS) {
-                            outputBuffer.delete(0, outputBuffer.length - MAX_OUTPUT_CHARS)
+
+                val reader = Thread({
+                    try {
+                        val input = InputStreamReader(child.inputStream, StandardCharsets.UTF_8)
+                        val chars = CharArray(4096)
+                        while (true) {
+                            val count = input.read(chars)
+                            if (count < 0) break
+                            val chunk = String(chars, 0, count)
+                            synchronized(outputBuffer) {
+                                outputBuffer.append(chunk)
+                                if (outputBuffer.length > MAX_OUTPUT_CHARS) {
+                                    outputBuffer.delete(0, outputBuffer.length - MAX_OUTPUT_CHARS)
+                                }
+                            }
+                            outputListener?.invoke(chunk)
+                            if (chunk.contains("APOLO_GUEST_BOOTED")) {
+                                publishStatus("Kernel Linux iniciado · verificando serviços do guest")
+                            }
                         }
+                        val exit = child.waitFor()
+                        publishStatus("QEMU encerrou (código $exit)")
+                    } catch (error: Exception) {
+                        publishStatus("Erro no fluxo serial do QEMU: ${error.message}")
+                    } finally {
+                        if (process === child) process = null
                     }
-                    outputListener?.invoke(chunk)
-                    if (chunk.contains("APOLO_GUEST_BOOTED")) {
-                        publishStatus("Kernel Linux iniciado · verificando serviços do guest")
-                    }
-                }
-                val exit = child.waitFor()
-                publishStatus("QEMU encerrou (código $exit)")
-                process = null
+                }, "apolo-qemu-serial")
+                reader.isDaemon = true
+                readerThread = reader
+                reader.start()
             } catch (error: Exception) {
                 publishStatus("Falha ao iniciar QEMU: ${error.message}")
                 process = null
@@ -128,8 +142,14 @@ class VmService : Service() {
     fun stopVm() {
         executor.execute {
             publishStatus("Encerrando VM…")
-            process?.destroy()
-            if (process?.isAlive == true) process?.destroyForcibly()
+            val child = process
+            if (child != null) {
+                child.destroy()
+                if (!child.waitFor(3, TimeUnit.SECONDS)) {
+                    child.destroyForcibly()
+                    child.waitFor(3, TimeUnit.SECONDS)
+                }
+            }
             process = null
             publishStatus("VM parada")
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -138,11 +158,10 @@ class VmService : Service() {
     }
 
     private fun publishStatus(message: String) {
+        lastStatus = message
         statusListener?.invoke(message)
         val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.notify(NOTIFICATION_ID, buildNotification(message))
-        }
+        manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
     private fun buildNotification(message: String): Notification {
@@ -172,7 +191,7 @@ class VmService : Service() {
     }
 
     override fun onDestroy() {
-        process?.destroy()
+        process?.destroyForcibly()
         executor.shutdownNow()
         super.onDestroy()
     }
