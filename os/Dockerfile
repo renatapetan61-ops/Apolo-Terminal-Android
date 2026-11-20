@@ -13,7 +13,7 @@ RUN test "${TARGETARCH}" = "arm64" && apt-get update && \
       git wget jq vim-tiny nano less file findutils grep sed gawk \
       build-essential pkg-config cmake ninja-build make gcc g++ \
       python3 python3-pip python3-venv pipx \
-      openssh-client rsync unzip zip tar gzip bzip2 xz-utils zstd \
+      openssh-client openssh-server rsync unzip zip tar gzip bzip2 xz-utils zstd \
       dnsutils iputils-ping net-tools isc-dhcp-client \
       dbus dbus-user-session uidmap slirp4netns fuse-overlayfs && \
     install -d -m 0755 /etc/apt/keyrings && \
@@ -22,8 +22,7 @@ RUN test "${TARGETARCH}" = "arm64" && apt-get update && \
     . /etc/os-release && \
     echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # Resolve official current Node.js LTS for ARM64 and verify SHA256.
 RUN set -eux; \
