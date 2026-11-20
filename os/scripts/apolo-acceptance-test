@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "Run this acceptance test as root inside the guest VM." >&2; exit 1; }
+
+echo "== APOLO Linux guest =="
+uname -a
+cat /etc/os-release
+test -d /proc/self/ns/user
+test -d /proc/self/ns/net
+grep -q cgroup2 /proc/mounts
+grep -qw overlay /proc/filesystems
+for controller in cpu memory pids; do grep -qw "$controller" /sys/fs/cgroup/cgroup.controllers; done
+echo "PASS: kernel namespaces, cgroup v2 and overlayfs"
+
+echo "== Node.js LTS =="
+node --version
+npm --version
+npx --version
+corepack --version
+node -p 'process.release.lts || process.exit(1)'
+
+echo "== APT package repository =="
+apt-get update
+APT_COUNT="$(apt-cache pkgnames | sort -u | wc -l)"
+echo "Indexed packages: $APT_COUNT"
+test "$APT_COUNT" -ge 10000
+
+echo "== Linux user management =="
+TEST_USER="apolo-validation"
+if id "$TEST_USER" >/dev/null 2>&1; then TEST_USER="apolo-validation-$RANDOM"; fi
+apolo-useradd "$TEST_USER" --sudo
+getent passwd "$TEST_USER" | grep -q "/home/$TEST_USER:/bin/bash$"
+su - "$TEST_USER" -c 'test "$HOME" = "/home/'"$TEST_USER"'" && id'
+id "$TEST_USER" | grep -qw sudo
+echo "PASS: useradd, home, sudo group and su"
+
+echo "== Docker Engine =="
+pgrep -x dockerd >/dev/null
+docker version
+DOCKER_INFO="$(docker info --format '{{.Driver}}|{{.CgroupVersion}}')"
+echo "Docker storage/cgroup: $DOCKER_INFO"
+test "$DOCKER_INFO" = "overlay2|2"
+docker run --rm hello-world
+
+echo "== Docker Compose v2 =="
+docker compose version
+cat >/tmp/apolo-compose-acceptance.yaml <<'YAML'
+services:
+  smoke:
+    image: hello-world
+YAML
+docker compose -f /tmp/apolo-compose-acceptance.yaml up --abort-on-container-exit --exit-code-from smoke
+docker compose -f /tmp/apolo-compose-acceptance.yaml down
+echo "APOLO_ACCEPTANCE_TEST=PASS"
