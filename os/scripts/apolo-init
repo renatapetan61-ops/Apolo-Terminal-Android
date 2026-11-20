@@ -10,6 +10,7 @@ if ! mountpoint -q /sys/fs/cgroup; then
   mount -t cgroup2 cgroup2 /sys/fs/cgroup || { echo "FATAL: cgroup v2 unavailable" >&2; exec /bin/bash; }
 fi
 ip link set lo up 2>/dev/null || true
+ip link set eth0 up 2>/dev/null || true
 dhclient -1 eth0 2>/dev/null || true
 mkdir -p /run/sshd /var/log
 if [ -x /usr/sbin/sshd ]; then /usr/sbin/sshd || true; fi
