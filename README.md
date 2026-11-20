@@ -20,7 +20,7 @@ The app must report VM_READY_TCG, VM_READY_KVM, or UNSUPPORTED based on runtime 
 ## Architecture
 
     Android 16 (unrooted)
-    └── APOLO Terminal Android (Kotlin + Jetpack Compose)
+    └── APOLO Terminal Android (Kotlin + Android Views)
         ├── VM lifecycle / storage / capability manager
         ├── Terminal UI (xterm.js in a local WebView)
         ├── PTY + WebView bridge (strictly local, allowlisted)
@@ -38,7 +38,7 @@ The app must report VM_READY_TCG, VM_READY_KVM, or UNSUPPORTED based on runtime 
 
 | Area | Decision |
 |---|---|
-| Android UI | Kotlin, Jetpack Compose, Android WebView |
+| Android UI | Kotlin, Android Views, Android WebView |
 | Terminal renderer | xterm.js bundled locally; no CDN |
 | VM | QEMU system-aarch64; TCG default, KVM only if accessible |
 | Guest OS | Debian stable ARM64 minimal rootfs |
