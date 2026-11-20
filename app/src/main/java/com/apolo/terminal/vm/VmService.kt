@@ -73,11 +73,13 @@ class VmService : Service() {
             try {
                 val command = listOf(
                     bin.absolutePath,
+                    "-accel", "tcg",
                     "-machine", "virt",
                     "-cpu", "cortex-a57",
                     "-m", "2048",
                     "-smp", "2",
                     "-kernel", kernel.absolutePath,
+                    "-L", File(filesDir, "share/qemu").absolutePath,
                     "-drive", "if=none,id=rootdisk,file=${disk.absolutePath},format=raw",
                     "-device", "virtio-blk-device,drive=rootdisk",
                     "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22",
@@ -87,7 +89,11 @@ class VmService : Service() {
                     "-serial", "stdio",
                     "-append", "console=ttyAMA0,115200 root=/dev/vda rw rootwait init=/sbin/apolo-init"
                 )
-                val child = ProcessBuilder(command).directory(filesDir).redirectErrorStream(true).start()
+                val builder = ProcessBuilder(command).directory(filesDir).redirectErrorStream(true)
+                builder.environment()["LD_LIBRARY_PATH"] = File(filesDir, "lib").absolutePath
+                builder.environment()["HOME"] = filesDir.absolutePath
+                builder.environment()["QEMU_AUDIO_DRV"] = "none"
+                val child = builder.start()
                 process = child
                 publishStatus("QEMU iniciado; aguardando boot do kernel Linux…")
 
