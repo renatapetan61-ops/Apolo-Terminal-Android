@@ -1,0 +1,26 @@
+#!/bin/bash
+set -Eeuo pipefail
+[ "$EUID" -eq 0 ] || { echo "Run as root inside the guest." >&2; exit 1; }
+[ "$#" -ge 1 ] || { echo "Usage: apolo-useradd USER [--zsh] [--sudo] [--docker]" >&2; exit 2; }
+user="$1"; shift
+shell=/bin/bash; want_sudo=0; want_docker=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --zsh) shell=/usr/bin/zsh ;;
+    --sudo) want_sudo=1 ;;
+    --docker) want_docker=1 ;;
+    *) echo "Unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+[[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || { echo "Invalid Linux username." >&2; exit 2; }
+id "$user" >/dev/null 2>&1 && { echo "User already exists: $user" >&2; exit 1; }
+useradd --create-home --shell "$shell" --user-group "$user"
+[ "$want_sudo" -eq 0 ] || usermod -aG sudo "$user"
+if [ "$want_docker" -eq 1 ]; then
+  getent group docker >/dev/null || groupadd docker
+  usermod -aG docker "$user"
+  echo "WARNING: docker group membership is root-equivalent inside this guest." >&2
+fi
+echo "Created $user with home /home/$user and shell $shell."
+echo "Set password interactively: passwd $user"
