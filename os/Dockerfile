@@ -48,7 +48,11 @@ RUN chmod 0755 /sbin/apolo-init /usr/local/sbin/apolo-kernel-check /usr/local/sb
     apt-cache pkgnames | sort -u | wc -l > /etc/apolo-apt-package-index-count && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN mkdir -p /out && tar --numeric-owner --xattrs --acls -czf /out/rootfs.tar.gz -C / . && \
+RUN tar --numeric-owner --xattrs --acls \
+      --exclude=./out --exclude=./proc --exclude=./sys --exclude=./dev \
+      --exclude=./run --exclude=./tmp --exclude=./var/cache/apt/archives \
+      -czf /tmp/apolo-rootfs.tar.gz -C / . && \
+    mkdir -p /out && mv /tmp/apolo-rootfs.tar.gz /out/rootfs.tar.gz && \
     { echo "architecture=arm64"; echo "debian_suite=${DEBIAN_SUITE}"; echo "node_lts=$(node --version)"; echo "docker=$(docker --version)"; echo "compose=$(docker compose version --short)"; echo "apt_index_packages=$(cat /etc/apolo-apt-package-index-count)"; } > /out/build-info.txt
 
 FROM scratch AS export
