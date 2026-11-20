@@ -28,6 +28,8 @@ make -C "$SRC_DIR" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O="$OUT_DIR" oldd
   --enable NET --enable INET --enable PACKET --enable UNIX --enable TUN \
   --enable IP_NF_IPTABLES --enable IP_NF_FILTER --enable IP_NF_NAT \
   --enable NETFILTER --enable NF_CONNTRACK --enable NF_NAT \
+  --enable NF_TABLES --enable NF_TABLES_INET --enable NFT_CT --enable NFT_NAT \
+  --enable NFT_MASQ --enable NFT_REJECT --enable NFT_COUNTER --enable NFT_COMPAT \
   --enable NETFILTER_XTABLES --enable NETFILTER_XT_MATCH_ADDRTYPE \
   --enable NETFILTER_XT_MATCH_CONNTRACK --enable NETFILTER_XT_TARGET_MASQUERADE
 make -C "$SRC_DIR" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O="$OUT_DIR" olddefconfig
