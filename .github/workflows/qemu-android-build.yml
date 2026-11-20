@@ -1,0 +1,66 @@
+name: APOLO Android QEMU runtime
+
+on:
+  push:
+    branches:
+      - "feature/**"
+    paths:
+      - "os/qemu-android/**"
+      - "docs/QEMU-ANDROID-RUNTIME.md"
+      - ".github/workflows/qemu-android-build.yml"
+  pull_request:
+    paths:
+      - "os/qemu-android/**"
+      - "docs/QEMU-ANDROID-RUNTIME.md"
+      - ".github/workflows/qemu-android-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apolo-qemu-android-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout APOLO
+        uses: actions/checkout@v4
+        with:
+          path: apolo
+      - name: Checkout pinned Termux package recipes
+        uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          ref: 0134674a8ea0cccea4bebbe6ac43750b46f16194
+          path: termux-packages
+      - name: Prepare Termux package-builder container
+        working-directory: termux-packages
+        run: ./scripts/run-docker.sh true
+      - name: Build Android ARM64 QEMU and bundle dependencies
+        working-directory: termux-packages
+        run: |
+          cp ../apolo/os/qemu-android/build-runtime.sh ./build-apolo-qemu-runtime.sh
+          chmod +x ./build-apolo-qemu-runtime.sh
+          ./scripts/run-docker.sh bash ./build-apolo-qemu-runtime.sh
+      - name: Verify QEMU runtime archive
+        working-directory: termux-packages/output
+        run: |
+          set -euo pipefail
+          test -s apolo-qemu-android-arm64.zip
+          test -s apolo-qemu-android-arm64.zip.sha256
+          sha256sum -c apolo-qemu-android-arm64.zip.sha256
+          unzip -l apolo-qemu-android-arm64.zip | grep -q 'bin/qemu-system-aarch64'
+      - name: Upload Android QEMU runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: apolo-qemu-android-arm64
+          path: |
+            termux-packages/output/apolo-qemu-android-arm64.zip
+            termux-packages/output/apolo-qemu-android-arm64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
