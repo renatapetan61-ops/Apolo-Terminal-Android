@@ -7,7 +7,7 @@ QEMU="${QEMU_SYSTEM_AARCH64:-qemu-system-aarch64}"
 command -v "$QEMU" >/dev/null
 : > "$LOG"
 
-coproc APOLO_QEMU { timeout 600s "$QEMU" \
+coproc APOLO_QEMU { exec timeout 600s "$QEMU" \
   -machine virt -cpu cortex-a57 -m 2048 -smp 2 \
   -kernel "$KERNEL" \
   -drive if=none,id=rootdisk,file="$DISK",format=raw \
