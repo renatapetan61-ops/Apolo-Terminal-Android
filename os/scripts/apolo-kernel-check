@@ -1,0 +1,23 @@
+#!/bin/bash
+set -u
+fail=0
+config_has() {
+  local key="$1"
+  if [ -r /proc/config.gz ]; then zcat /proc/config.gz | grep -Eq "^(${key}=y|${key}=m)$"; return; fi
+  if [ -r "/boot/config-$(uname -r)" ]; then grep -Eq "^(${key}=y|${key}=m)$" "/boot/config-$(uname -r)"; return; fi
+  return 2
+}
+echo "Kernel: $(uname -a)"
+echo "Cgroup mounts:"; grep -E 'cgroup2?' /proc/mounts || true
+for key in CONFIG_NAMESPACES CONFIG_UTS_NS CONFIG_IPC_NS CONFIG_USER_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_CGROUPS CONFIG_CGROUP_PIDS CONFIG_CGROUP_CPUACCT CONFIG_CGROUP_DEVICE CONFIG_CGROUP_FREEZER CONFIG_CGROUP_SCHED CONFIG_MEMCG CONFIG_OVERLAY_FS CONFIG_VETH CONFIG_BRIDGE CONFIG_BRIDGE_NETFILTER CONFIG_NF_NAT CONFIG_NF_CONNTRACK CONFIG_NETFILTER CONFIG_SECCOMP CONFIG_SECCOMP_FILTER CONFIG_KEYS; do
+  if config_has "$key"; then echo "PASS $key"; else echo "FAIL/UNKNOWN $key"; fail=1; fi
+done
+for p in /sys/fs/cgroup /proc/self/ns/user /proc/self/ns/net; do
+  if [ -e "$p" ]; then echo "PASS $p"; else echo "FAIL $p"; fail=1; fi
+done
+grep -q cgroup2 /proc/mounts || fail=1
+if [ "${1:-}" = "--docker" ]; then
+  command -v dockerd >/dev/null || fail=1
+  iptables -L -n >/dev/null 2>&1 || fail=1
+fi
+exit "$fail"
