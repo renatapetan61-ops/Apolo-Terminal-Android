@@ -4,7 +4,7 @@
 Android owns the UI, app-private storage and QEMU process. QEMU boots an ARM64 Linux kernel with a persistent ext4 disk containing Debian ARM64. This is a VM, not a chroot or a simulated shell.
 
 ### Android layer
-- Kotlin + Jetpack Compose for navigation, VM controls and capability reporting.
+- Kotlin + Android Views for navigation, VM controls and capability reporting.
 - Locally bundled xterm.js in WebView; no CDN.
 - Restricted terminal bridge for PTY input, output and resize only.
 - QEMU system-aarch64 built with Android NDK. TCG is baseline; KVM is opportunistic only after /dev/kvm is actually opened.
