@@ -30,7 +30,7 @@ for library in "$PREFIX"/lib/*.so*; do
 done
 
 if [ -d "$PREFIX/share/qemu" ]; then
-  cp -a "$PREFIX/share/qemu" "$STAGE/share/qemu"
+  cp -RL "$PREFIX/share/qemu" "$STAGE/share/qemu"
 fi
 
 # NDK libc++ runtime, when QEMU's ELF dependency table requires it.
@@ -41,6 +41,17 @@ fi
 readelf -h "$STAGE/bin/qemu-system-aarch64" | grep -q 'AArch64'
 readelf -l "$STAGE/bin/qemu-system-aarch64" | grep -q '/system/bin/linker64'
 readelf -d "$STAGE/bin/qemu-system-aarch64" > "$STAGE/qemu-needed-libraries.txt"
+while IFS= read -r needed; do
+  case "$needed" in
+    libc.so|libm.so|libdl.so|liblog.so|libandroid.so|libz.so|libjnigraphics.so|libnativewindow.so|libvulkan.so|libEGL.so)
+      continue
+      ;;
+  esac
+  if [ ! -s "$STAGE/lib/$needed" ]; then
+    echo "Missing Android QEMU runtime dependency: $needed" >&2
+    exit 1
+  fi
+done < <(sed -n 's/.*Shared library: \[\([^]]*\)\].*/\1/p' "$STAGE/qemu-needed-libraries.txt")
 {
   echo "qemu_source_version=11.1.3"
   echo "termux_packages_commit=$(git rev-parse HEAD)"
