@@ -21,6 +21,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.zip.ZipInputStream
 import com.apolo.terminal.vm.VmService
 import org.json.JSONObject
 
@@ -152,17 +153,79 @@ class MainActivity : Activity() {
         status.text = "Copiando ${kind.label} para o armazenamento privado…"
         importExecutor.execute {
             try {
-                val target = File(filesDir, kind.relativePath)
-                target.parentFile?.mkdirs()
-                contentResolver.openInputStream(uri).use { input ->
-                    requireNotNull(input) { "Não foi possível abrir o arquivo selecionado" }
-                    target.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+                if (kind == ImportKind.QEMU) {
+                    installQemuRuntime(uri)
+                    runOnUiThread { status.text = "Runtime QEMU ARM64 instalado em armazenamento privado" }
+                } else {
+                    val target = File(filesDir, kind.relativePath)
+                    target.parentFile?.mkdirs()
+                    val source = requireNotNull(contentResolver.openInputStream(uri)) {
+                        "Não foi possível abrir o arquivo selecionado"
+                    }
+                    source.use { input ->
+                        target.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+                    }
+                    runOnUiThread { status.text = "${kind.label} importado: ${target.length()} bytes" }
                 }
-                if (kind == ImportKind.QEMU) target.setExecutable(true, true)
-                runOnUiThread { status.text = "${kind.label} importado: ${target.length()} bytes" }
             } catch (error: Exception) {
                 runOnUiThread { status.text = "Falha ao importar ${kind.label}: ${error.message}" }
             }
+        }
+    }
+
+    private fun installQemuRuntime(uri: Uri) {
+        val root = filesDir.canonicalFile
+        File(filesDir, "bin").deleteRecursively()
+        File(filesDir, "lib").deleteRecursively()
+        File(filesDir, "share/qemu").deleteRecursively()
+        val source = requireNotNull(contentResolver.openInputStream(uri)) {
+            "Não foi possível abrir o ZIP do runtime QEMU"
+        }
+        var totalBytes = 0L
+        source.use { raw ->
+            ZipInputStream(raw.buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    if (!entry.isDirectory) {
+                        require(entry.name.startsWith("apolo-qemu-runtime/")) {
+                            "ZIP não corresponde ao pacote APOLO QEMU"
+                        }
+                        val relative = entry.name.removePrefix("apolo-qemu-runtime/")
+                        val allowed = relative.startsWith("bin/") ||
+                            relative.startsWith("lib/") ||
+                            relative.startsWith("share/qemu/") ||
+                            relative == "build-info.txt" ||
+                            relative == "qemu-needed-libraries.txt"
+                        require(allowed) { "Arquivo não permitido no runtime: $relative" }
+                        val destination = File(root, relative)
+                        require(destination.canonicalPath.startsWith(root.canonicalPath + File.separator)) {
+                            "Caminho inseguro no ZIP"
+                        }
+                        destination.parentFile?.mkdirs()
+                        destination.outputStream().buffered().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val count = zip.read(buffer)
+                                if (count < 0) break
+                                totalBytes += count
+                                require(totalBytes <= MAX_QEMU_RUNTIME_BYTES) {
+                                    "Runtime QEMU excede o limite de 1,5 GB"
+                                }
+                                output.write(buffer, 0, count)
+                            }
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+        }
+        val executable = File(filesDir, "bin/qemu-system-aarch64")
+        require(executable.isFile && executable.length() > 0) {
+            "O ZIP não contém bin/qemu-system-aarch64"
+        }
+        require(executable.setExecutable(true, true)) {
+            "Não foi possível marcar QEMU como executável"
         }
     }
 
@@ -175,13 +238,14 @@ class MainActivity : Activity() {
     }
 
     private enum class ImportKind(val label: String, val relativePath: String) {
-        QEMU("QEMU ARM64", "bin/qemu-system-aarch64"),
+        QEMU("Runtime QEMU ARM64", ""),
         KERNEL("Kernel Linux", "vm/Image"),
         DISK("Disco ext4", "vm/apolo-rootfs.ext4")
     }
 
     companion object {
         private const val FILE_PICKER_REQUEST = 7412
+        private const val MAX_QEMU_RUNTIME_BYTES = 1_610_612_736L
     }
 
     private class TerminalBridge(private val input: (String) -> Unit) {
