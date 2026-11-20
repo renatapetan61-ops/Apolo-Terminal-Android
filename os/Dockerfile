@@ -33,6 +33,7 @@ RUN set -eux; \
     curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o SHASUMS256.txt; \
     grep " ${NODE_FILE}$" SHASUMS256.txt | sha256sum -c -; \
     tar -xJf "${NODE_FILE}" -C /usr/local --strip-components=1 --no-same-owner; \
+    npm install --global corepack; \
     corepack enable; node --version; npm --version; npx --version; corepack --version; \
     rm -f "${NODE_FILE}" SHASUMS256.txt
 
