@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link rel="stylesheet" href="vendor/xterm.css">
+  <style>
+    html, body, #terminal { width:100%; height:100%; margin:0; padding:0; background:#0a0f1c; overflow:hidden; }
+    .xterm { height:100%; padding:10px; box-sizing:border-box; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script>
+    const term = new Terminal({
+      cursorBlink:true, convertEol:true, scrollback:10000,
+      fontFamily:'monospace', fontSize:13,
+      theme:{background:'#0a0f1c',foreground:'#e5e7eb',cursor:'#60a5fa'}
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById('terminal'));
+    fit.fit();
+    term.writeln('APOLO Terminal Android');
+    term.writeln('Console serial real do kernel convidado QEMU.');
+    term.writeln('Inicie a VM pelo botão acima. O app não simula comandos.');
+    term.onData(data => {
+      if (window.ApoloBridge) window.ApoloBridge.sendInput(data);
+    });
+    window.apoloWrite = text => term.write(text);
+    window.addEventListener('resize', () => fit.fit());
+    setTimeout(() => fit.fit(), 100);
+  </script>
+</body>
+</html>

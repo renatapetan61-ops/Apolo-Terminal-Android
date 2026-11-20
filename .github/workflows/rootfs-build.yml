@@ -1,0 +1,139 @@
+name: APOLO Linux ARM64 VM build
+
+on:
+  push:
+    branches:
+      - "feature/**"
+    paths:
+      - "os/**"
+      - ".github/workflows/rootfs-build.yml"
+  pull_request:
+    paths:
+      - "os/**"
+      - ".github/workflows/rootfs-build.yml"
+  workflow_dispatch:
+    inputs:
+      debian_suite:
+        description: Debian suite
+        required: true
+        default: trixie
+        type: choice
+        options:
+          - trixie
+      kernel_version:
+        description: Official Linux stable/LTS tag
+        required: true
+        default: "6.18.64"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apolo-linux-arm64-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-rootfs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU for ARM64 build
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Debian ARM64 rootfs
+        uses: docker/build-push-action@v6
+        with:
+          context: ./os
+          platforms: linux/arm64
+          build-args: |
+            DEBIAN_SUITE=${{ inputs.debian_suite || 'trixie' }}
+          outputs: type=local,dest=./out
+      - name: Verify rootfs artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s out/rootfs.tar.gz
+          test -s out/build-info.txt
+          grep -q '^architecture=arm64$' out/build-info.txt
+          grep -q '^node_lts=v' out/build-info.txt
+          grep -q '^docker=' out/build-info.txt
+          grep -q '^compose=' out/build-info.txt
+          tar -tzf out/rootfs.tar.gz >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apolo-debian-arm64-rootfs
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
+  build-kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM64 cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu bc bison flex libssl-dev libelf-dev dwarves
+      - name: Build official Linux ARM64 guest kernel
+        env:
+          KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.64' }}
+          WORK_DIR: ${{ runner.temp }}/kernel-source
+          OUT_DIR: ${{ github.workspace }}/kernel-out
+        run: bash ./os/kernel/build-kernel.sh
+      - name: Upload kernel image and config
+        uses: actions/upload-artifact@v4
+        with:
+          name: apolo-linux-arm64-kernel
+          path: |
+            kernel-out/Image
+            kernel-out/kernel.config
+            kernel-out/source-commit.txt
+            kernel-out/build-info.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  assemble-and-boot:
+    needs: [build-rootfs, build-kernel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install filesystem and QEMU tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y e2fsprogs qemu-system-arm
+      - name: Download rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: apolo-debian-arm64-rootfs
+          path: artifacts/rootfs
+      - name: Download kernel
+        uses: actions/download-artifact@v4
+        with:
+          name: apolo-linux-arm64-kernel
+          path: artifacts/kernel
+      - name: Assemble persistent ext4 VM disk
+        run: |
+          chmod +x os/image/create-disk.sh os/image/qemu-smoke-test.sh
+          ./os/image/create-disk.sh artifacts/rootfs/rootfs.tar.gz artifacts/kernel/Image out 6G
+      - name: Boot the real ARM64 guest under QEMU TCG
+        run: |
+          set -o pipefail
+          ./os/image/qemu-smoke-test.sh out/Image out/apolo-rootfs.ext4 out/qemu-boot.log
+      - name: Upload bootable VM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apolo-linux-arm64-vm-image
+          path: |
+            out/Image
+            out/apolo-rootfs.ext4
+            out/SHA256SUMS
+            out/qemu-boot.log
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 1
