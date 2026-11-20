@@ -1,0 +1,22 @@
+#!/bin/bash
+set -Eeuo pipefail
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev || true
+mkdir -p /dev/pts /dev/shm /run /sys/fs/cgroup
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
+mountpoint -q /dev/shm || mount -t tmpfs -o nosuid,nodev tmpfs /dev/shm
+if ! mountpoint -q /sys/fs/cgroup; then
+  mount -t cgroup2 cgroup2 /sys/fs/cgroup || { echo "FATAL: cgroup v2 unavailable" >&2; exec /bin/bash; }
+fi
+ip link set lo up 2>/dev/null || true
+dhclient -1 eth0 2>/dev/null || true
+mkdir -p /run/sshd /var/log
+if [ -x /usr/sbin/sshd ]; then /usr/sbin/sshd || true; fi
+echo "APOLO_GUEST_BOOTED"
+/usr/local/sbin/apolo-kernel-check && echo "APOLO_KERNEL_CAPABILITIES=PASS" || echo "APOLO_KERNEL_CAPABILITIES=FAIL"
+if [ "${APOLO_START_DOCKER:-1}" = "1" ] && /usr/local/sbin/apolo-kernel-check --docker; then
+  dockerd --config-file=/etc/docker/daemon.json >>/var/log/dockerd.log 2>&1 &
+fi
+if [ "$#" -gt 0 ]; then exec "$@"; fi
+exec /bin/bash -l
