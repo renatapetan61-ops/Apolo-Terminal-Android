@@ -80,7 +80,7 @@ jobs:
           KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.64' }}
           WORK_DIR: ${{ runner.temp }}/kernel-source
           OUT_DIR: ${{ github.workspace }}/kernel-out
-        run: ./os/kernel/build-kernel.sh
+        run: bash ./os/kernel/build-kernel.sh
       - name: Upload kernel image and config
         uses: actions/upload-artifact@v4
         with:
