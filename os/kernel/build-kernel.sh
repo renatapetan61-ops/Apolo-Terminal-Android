@@ -23,7 +23,7 @@ make -C "$SRC_DIR" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O="$OUT_DIR" oldd
   --enable PRINTK --enable SERIAL_AMBA_PL011 --enable SERIAL_AMBA_PL011_CONSOLE \
   --enable VIRTIO --enable VIRTIO_MMIO --enable VIRTIO_BLK --enable VIRTIO_NET \
   --enable EXT4_FS --enable DEVTMPFS --enable DEVTMPFS_MOUNT \
-  --enable IKCONFIG --enable IKCONFIG_PROC --enable CGROUP2_FS \
+  --enable IKCONFIG --enable IKCONFIG_PROC --enable CGROUPS \
   --enable PROC_FS --enable SYSFS --enable TMPFS --enable TMPFS_POSIX_ACL \
   --enable NET --enable INET --enable PACKET --enable UNIX --enable TUN \
   --enable IP_NF_IPTABLES --enable IP_NF_FILTER --enable IP_NF_NAT \
