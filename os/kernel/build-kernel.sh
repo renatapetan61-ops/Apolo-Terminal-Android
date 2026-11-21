@@ -11,7 +11,9 @@ mkdir -p "$WORK_DIR" "$OUT_DIR"
 if [ ! -d "$SRC_DIR/.git" ]; then
   git clone --depth 1 --branch "v$KERNEL_VERSION" https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git "$SRC_DIR"
 fi
-test "$(git -C "$SRC_DIR" describe --tags --exact-match HEAD)" = "v$KERNEL_VERSION"
+EXPECTED_COMMIT="$(git -C "$SRC_DIR" rev-parse "v$KERNEL_VERSION^{commit}")"
+ACTUAL_COMMIT="$(git -C "$SRC_DIR" rev-parse HEAD)"
+test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
 
 make -C "$SRC_DIR" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O="$OUT_DIR" defconfig
 "$SRC_DIR/scripts/kconfig/merge_config.sh" -m -O "$OUT_DIR" "$OUT_DIR/.config" "$PWD/os/kernel/docker.config"
