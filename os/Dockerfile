@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
-ARG DEBIAN_SUITE=trixie
-FROM --platform=linux/arm64 debian:${DEBIAN_SUITE}-slim AS rootfs
-ARG DEBIAN_SUITE
+ARG UBUNTU_VERSION=26.04
+FROM --platform=linux/arm64 ubuntu:26.04 AS rootfs
+ARG UBUNTU_VERSION
 ARG TARGETARCH=arm64
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -17,10 +17,10 @@ RUN test "${TARGETARCH}" = "arm64" && apt-get update && \
       dnsutils iputils-ping net-tools isc-dhcp-client \
       dbus dbus-user-session uidmap slirp4netns fuse-overlayfs && \
     install -d -m 0755 /etc/apt/keyrings && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
     chmod 0644 /etc/apt/keyrings/docker.gpg && \
     . /etc/os-release && \
-    echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list && \
+    echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list && \
     apt-get update && \
     apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
@@ -54,7 +54,7 @@ RUN tar --numeric-owner --xattrs --acls \
       --exclude=./run --exclude=./tmp --exclude=./var/cache/apt/archives \
       -czf /tmp/apolo-rootfs.tar.gz -C / . && \
     mkdir -p /out && mv /tmp/apolo-rootfs.tar.gz /out/rootfs.tar.gz && \
-    { echo "architecture=arm64"; echo "debian_suite=${DEBIAN_SUITE}"; echo "node_lts=$(node --version)"; echo "docker=$(docker --version)"; echo "compose=$(docker compose version --short)"; echo "apt_index_packages=$(cat /etc/apolo-apt-package-index-count)"; } > /out/build-info.txt
+    { echo "architecture=arm64"; echo "guest_os=ubuntu"; echo "ubuntu_version=${UBUNTU_VERSION}"; echo "node_lts=$(node --version)"; echo "docker=$(docker --version)"; echo "compose=$(docker compose version --short)"; echo "apt_index_packages=$(cat /etc/apolo-apt-package-index-count)"; } > /out/build-info.txt
 
 FROM scratch AS export
 COPY --from=rootfs /out/ /
