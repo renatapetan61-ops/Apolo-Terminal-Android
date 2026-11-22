@@ -9,26 +9,17 @@ source scripts/properties.sh
 PREFIX="${TERMUX__PREFIX}"
 OUT="$PWD/output"
 STAGE="$OUT/apolo-qemu-runtime"
-DEB="$(find "$OUT" -maxdepth 1 -type f -name 'qemu-system-x86-64-headless_*_aarch64.deb' -print -quit)"
-
-if [ -z "$DEB" ]; then
-  echo "qemu-system-x86-64-headless .deb was not produced." >&2
-  find "$OUT" -maxdepth 1 -type f -name '*.deb' -printf '%f\n' >&2 || true
+BUILD_TREE="$HOME/.termux-build/qemu-system-x86-64-headless/src/build"
+QEMU_SOURCE="$(find "$BUILD_TREE" -type f -name qemu-system-aarch64 -perm -u+x -print -quit 2>/dev/null || true)"
+if [ -z "$QEMU_SOURCE" ]; then
+  echo "The QEMU ARM64 system-emulator binary was not found in the compiled Meson build tree: $BUILD_TREE" >&2
+  find "$HOME/.termux-build/qemu-system-x86-64-headless" -type f -name 'qemu-system-*' -print 2>/dev/null | head -80 >&2 || true
   exit 1
 fi
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/lib" "$STAGE/share"
-dpkg-deb -x "$DEB" "$STAGE"
-QEMU_SOURCE="$(find "$STAGE" -type f -name qemu-system-aarch64 -print -quit)"
-if [ -z "$QEMU_SOURCE" ]; then
-  echo "The built Termux package does not contain qemu-system-aarch64." >&2
-  find "$STAGE" -maxdepth 8 -type f -name 'qemu-system-*' -print >&2 || true
-  exit 1
-fi
-mkdir -p "$STAGE/bin"
 cp "$QEMU_SOURCE" "$STAGE/bin/qemu-system-aarch64"
-rm -rf "$STAGE/data"
 test -s "$STAGE/bin/qemu-system-aarch64"
 
 # Bundle the actual runtime libraries from the dependency prefix. Dereference
