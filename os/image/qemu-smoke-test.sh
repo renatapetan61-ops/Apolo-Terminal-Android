@@ -20,8 +20,10 @@ exec {QEMU_IN}>&"${APOLO_QEMU[1]}"
 exec {QEMU_OUT}<&"${APOLO_QEMU[0]}"
 
 record_until() {
-  local pattern="$1" timeout_seconds="$2" line
-  local deadline=$((SECONDS + timeout_seconds))
+  local pattern timeout_seconds line deadline
+  pattern="$1"
+  timeout_seconds="$2"
+  deadline=$((SECONDS + timeout_seconds))
   while (( SECONDS < deadline )); do
     if IFS= read -r -t 1 line <&"$QEMU_OUT"; then
       printf '%s\n' "$line" | tee -a "$LOG"
